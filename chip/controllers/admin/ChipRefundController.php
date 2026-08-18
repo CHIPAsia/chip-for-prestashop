@@ -114,7 +114,7 @@ class ChipRefundController extends ModuleAdminController
      */
     protected function ajaxDieJson($data)
     {
-        echo Tools::jsonEncode($data);
+        echo json_encode($data);
         die();
     }
 }

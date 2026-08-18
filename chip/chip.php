@@ -22,7 +22,7 @@ class Chip extends PaymentModule
     public $tab = 'payments_gateways';
 
     /** @var string */
-    public $version = '1.0.0';
+    public $version = '1.0.1';
 
     /** @var string */
     public $author = 'CHIPAsia';
@@ -46,7 +46,7 @@ class Chip extends PaymentModule
     public $confirmUninstall;
 
     /** @var string Module version used in the creator_agent header */
-    const CREATOR_AGENT = 'PrestaShop: 1.0.0';
+    const CREATOR_AGENT = 'PrestaShop: 1.0.1';
 
     public function __construct()
     {
@@ -333,7 +333,7 @@ class Chip extends PaymentModule
                 $whitelist = Tools::getValue('CHIP_PAYMENT_METHOD_WHITELIST[]');
                 if (is_array($whitelist)) {
                     $whitelist = array_values(array_filter($whitelist));
-                    Configuration::updateValue('CHIP_PAYMENT_METHOD_WHITELIST', Tools::jsonEncode($whitelist));
+                    Configuration::updateValue('CHIP_PAYMENT_METHOD_WHITELIST', json_encode($whitelist));
                 } else {
                     Configuration::updateValue('CHIP_PAYMENT_METHOD_WHITELIST', '');
                 }
@@ -441,7 +441,7 @@ class Chip extends PaymentModule
         $helper->fields_value = array(
             'CHIP_SECRET_KEY' => Configuration::get('CHIP_SECRET_KEY'),
             'CHIP_BRAND_ID' => Configuration::get('CHIP_BRAND_ID'),
-            'CHIP_PAYMENT_METHOD_WHITELIST[]' => Tools::jsonDecode(Configuration::get('CHIP_PAYMENT_METHOD_WHITELIST'), true),
+            'CHIP_PAYMENT_METHOD_WHITELIST[]' => json_decode(Configuration::get('CHIP_PAYMENT_METHOD_WHITELIST'), true),
             'CHIP_DUE_STRICT' => (int) Configuration::get('CHIP_DUE_STRICT'),
             'CHIP_PURCHASE_TIME_ZONE' => Configuration::get('CHIP_PURCHASE_TIME_ZONE'),
         );
@@ -493,7 +493,7 @@ class Chip extends PaymentModule
             return array();
         }
 
-        $whitelist = Tools::jsonDecode($whitelist, true);
+        $whitelist = json_decode($whitelist, true);
         if (!is_array($whitelist)) {
             return array();
         }

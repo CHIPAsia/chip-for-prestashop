@@ -87,7 +87,7 @@ class ChipApi
         }
 
         $url = $this->buildUrl($path, $query);
-        $json = Tools::jsonEncode($body);
+        $json = json_encode($body);
         $headers = array(
             'Authorization: Bearer ' . $this->secret_key,
             'Content-Type: application/json',
@@ -144,7 +144,7 @@ class ChipApi
             return false;
         }
 
-        $decoded = Tools::jsonDecode($response, true);
+        $decoded = json_decode($response, true);
         if (!is_array($decoded)) {
             PrestaShopLogger::addLog('CHIP: API returned invalid JSON for ' . $path . ' (status ' . $status . ')', 3, null, 'ChipApi', null, true);
 

@@ -45,7 +45,7 @@ class ChipCallbackModuleFrontController extends ModuleFrontController
         $signature = isset($_SERVER['HTTP_X_SIGNATURE']) ? (string) $_SERVER['HTTP_X_SIGNATURE'] : '';
 
         if ($signature !== '' && $chip->verifySignature($content, $signature)) {
-            $payment = Tools::jsonDecode($content, true);
+            $payment = json_decode($content, true);
             if (is_array($payment) && !empty($payment['id'])) {
                 return $payment;
             }

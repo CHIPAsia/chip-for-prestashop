@@ -1,5 +1,10 @@
 == Changelog ==
 
+## [1.0.1] - 2026-08-18
+
+### Fixed
+- Replace `Tools::jsonDecode` / `Tools::jsonEncode` with native `json_decode` / `json_encode`. The `Tools` wrappers were removed in PrestaShop 9.x, which caused a fatal `UndefinedMethodError` on the module configuration page.
+
 ## [1.0.0] - 2026-08-18
 
 ### Added
