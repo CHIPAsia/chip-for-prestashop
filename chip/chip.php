@@ -578,6 +578,13 @@ class Chip extends PaymentModule
      */
     public function getApi()
     {
+        // Explicit require: the PrestaShop class index may not have been
+        // rebuilt after the module was copied into place (e.g. manual install
+        // or module update), which would otherwise raise ClassNotFoundError.
+        if (!class_exists('ChipApi', false)) {
+            require_once _PS_MODULE_DIR_ . $this->name . '/classes/ChipApi.php';
+        }
+
         return ChipApi::getInstance(
             (string) Configuration::get('CHIP_SECRET_KEY'),
             (string) Configuration::get('CHIP_BRAND_ID')
