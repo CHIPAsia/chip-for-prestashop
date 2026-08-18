@@ -2,7 +2,7 @@
 <module>
 	<name>chip</name>
 	<displayName><![CDATA[CHIP]]></displayName>
-	<version><![CDATA[1.0.0]]></version>
+	<version><![CDATA[1.0.1]]></version>
 	<author><![CDATA[CHIPAsia]]></author>
 	<tab><![CDATA[payments_gateways]]></tab>
 	<is_configurable>1</is_configurable>

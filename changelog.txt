@@ -5,6 +5,14 @@
 ### Fixed
 - Replace `Tools::jsonDecode` / `Tools::jsonEncode` with native `json_decode` / `json_encode`. The `Tools` wrappers were removed in PrestaShop 9.x, which caused a fatal `UndefinedMethodError` on the module configuration page.
 
+### Added
+- `.htaccess` root protection (Apache 2.4 / 2.2) per PrestaShop Marketplace mandatory technical rules.
+- `docs/readme_en.pdf` — English user guide (PDF) per PrestaShop Marketplace documentation requirements.
+- `module_key` placeholder in the module constructor (to be filled with the key assigned by PrestaShop Addons).
+
+### Changed
+- `config.xml` version synced to 1.0.1.
+
 ## [1.0.0] - 2026-08-18
 
 ### Added
