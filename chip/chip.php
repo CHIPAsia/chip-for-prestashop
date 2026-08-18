@@ -306,7 +306,7 @@ class Chip extends PaymentModule
     }
 
     /**
-     * Admin configuration page (HelperForm).
+     * Admin configuration page.
      *
      * @return string HTML
      */
@@ -360,106 +360,48 @@ class Chip extends PaymentModule
     }
 
     /**
-     * Build the HelperForm configuration form.
-     *
-     * @return string HTML
-     */
-    protected function buildForm()
-    {
-        $default_lang = (int) Configuration::get('PS_LANG_DEFAULT');
-
-        $fields_form = array(
-            array(
-                'type' => 'legend',
-                'title' => $this->l('CHIP Settings'),
-                'icon' => 'icon-credit-card',
-            ),
-            array(
-                'type' => 'text',
-                'label' => $this->l('Secret Key'),
-                'name' => 'CHIP_SECRET_KEY',
-                'required' => true,
-                'desc' => $this->l('Your CHIP secret key (per brand). Never share this key.'),
-            ),
-            array(
-                'type' => 'text',
-                'label' => $this->l('Brand ID'),
-                'name' => 'CHIP_BRAND_ID',
-                'required' => true,
-                'desc' => $this->l('Your CHIP brand ID.'),
-            ),
-            array(
-                'type' => 'select',
-                'label' => $this->l('Payment Methods'),
-                'name' => 'CHIP_PAYMENT_METHOD_WHITELIST[]',
-                'multiple' => true,
-                'options' => array(
-                    'query' => array(
-                        array('id' => 'fpx', 'name' => 'FPX'),
-                        array('id' => 'fpx_b2b1', 'name' => 'FPX B2B1'),
-                        array('id' => 'card', 'name' => 'Card (Visa, Mastercard, Maestro)'),
-                        array('id' => 'duitnow_qr', 'name' => 'DuitNow QR'),
-                        array('id' => 'razer_atome', 'name' => 'Atome'),
-                        array('id' => 'razer_grabpay', 'name' => 'GrabPay'),
-                        array('id' => 'razer_maybankqr', 'name' => 'Maybank QRPay'),
-                        array('id' => 'razer_shopeepay', 'name' => 'ShopeePay'),
-                        array('id' => 'razer_tng', 'name' => "Touch 'n Go eWallet"),
-                        array('id' => 'crypto_coin', 'name' => 'Crypto Coin'),
-                    ),
-                    'id' => 'id',
-                    'name' => 'name',
-                ),
-                'desc' => $this->l('Leave empty to allow all payment methods. Select only the methods you want to offer.'),
-            ),
-            array(
-                'type' => 'switch',
-                'label' => $this->l('Due Strict'),
-                'name' => 'CHIP_DUE_STRICT',
-                'is_bool' => true,
-                'values' => array(
-                    array('id' => 'active_on', 'value' => 1, 'label' => $this->l('Enabled')),
-                    array('id' => 'active_off', 'value' => 0, 'label' => $this->l('Disabled')),
-                ),
-                'desc' => $this->l('When enabled, payment must be completed before the due time.'),
-            ),
-            array(
-                'type' => 'text',
-                'label' => $this->l('Purchase Timezone'),
-                'name' => 'CHIP_PURCHASE_TIME_ZONE',
-                'required' => true,
-                'desc' => $this->l('Timezone used for the purchase (e.g. Asia/Kuala_Lumpur).'),
-            ),
-        );
-
-        $helper = new HelperForm();
-        $helper->module = $this;
-        $helper->name_controller = $this->name;
-        $helper->token = Tools::getAdminTokenLite('AdminModules');
-        $helper->currentIndex = AdminController::$currentIndex . '&configure=' . $this->name;
-        $helper->title = $this->displayName;
-        $helper->submit_action = 'submitChipConfig';
-        $helper->default_form_language = $default_lang;
-        $helper->allow_employee_form_lang = $default_lang;
-
-        $helper->fields_value = array(
-            'CHIP_SECRET_KEY' => Configuration::get('CHIP_SECRET_KEY'),
-            'CHIP_BRAND_ID' => Configuration::get('CHIP_BRAND_ID'),
-            'CHIP_PAYMENT_METHOD_WHITELIST[]' => json_decode(Configuration::get('CHIP_PAYMENT_METHOD_WHITELIST'), true),
-            'CHIP_DUE_STRICT' => (int) Configuration::get('CHIP_DUE_STRICT'),
-            'CHIP_PURCHASE_TIME_ZONE' => Configuration::get('CHIP_PURCHASE_TIME_ZONE'),
-        );
-
-        return $helper->generateForm(array(array('form' => $fields_form)));
-    }
-
-    /**
-     * Render the configuration form.
+     * Render the configuration form (plain HTML template - avoids HelperForm
+     * template resolution issues on PrestaShop 9.x).
      *
      * @return string HTML
      */
     public function renderForm()
     {
-        return $this->buildForm();
+        $whitelist = $this->getConfiguredWhitelist();
+
+        $this->context->smarty->assign(array(
+            'chip_config_saved' => Tools::isSubmit('submitChipConfig') && count($this->getConfigErrors()) === 0,
+            'chip_config_error' => implode('<br />', $this->getConfigErrors()),
+            'chip_config_action' => $_SERVER['REQUEST_URI'],
+            'chip_secret_key' => (string) Configuration::get('CHIP_SECRET_KEY'),
+            'chip_brand_id' => (string) Configuration::get('CHIP_BRAND_ID'),
+            'chip_method_options' => $this->getFormattedLabels(),
+            'chip_method_selected' => $whitelist,
+            'chip_due_strict' => (int) Configuration::get('CHIP_DUE_STRICT'),
+            'chip_timezone' => (string) Configuration::get('CHIP_PURCHASE_TIME_ZONE'),
+        ));
+
+        return $this->display(__FILE__, 'config_form.tpl');
+    }
+
+    /**
+     * Collect configuration validation errors (used by renderForm).
+     *
+     * @return array
+     */
+    protected function getConfigErrors()
+    {
+        $errors = array();
+        if (Tools::isSubmit('submitChipConfig')) {
+            if (trim((string) Tools::getValue('CHIP_SECRET_KEY')) === '') {
+                $errors[] = $this->l('Secret key is required.');
+            }
+            if (trim((string) Tools::getValue('CHIP_BRAND_ID')) === '') {
+                $errors[] = $this->l('Brand ID is required.');
+            }
+        }
+
+        return $errors;
     }
 
     /**
