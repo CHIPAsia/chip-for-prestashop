@@ -112,7 +112,9 @@ class ChipApi
             }
             $response = curl_exec($curl);
             $status = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
-            curl_close($curl);
+            if (PHP_VERSION_ID < 80000) {
+                curl_close($curl);
+            }
         } else {
             $context = stream_context_create(array(
                 'http' => array(
@@ -128,8 +130,11 @@ class ChipApi
                 ),
             ));
             $response = @file_get_contents($url, false, $context);
-            if (isset($http_response_header) && is_array($http_response_header)) {
-                foreach ($http_response_header as $header_line) {
+            $response_headers = function_exists('http_get_last_response_headers')
+                ? http_get_last_response_headers()
+                : (isset($http_response_header) ? $http_response_header : array());
+            if (is_array($response_headers)) {
+                foreach ($response_headers as $header_line) {
                     if (preg_match('/^HTTP\/\S+\s+(\d{3})/', $header_line, $matches)) {
                         $status = (int) $matches[1];
                         break;
@@ -222,6 +227,66 @@ class ChipApi
         }
 
         return $this->request('GET', '/payment_methods/', array(), $query);
+    }
+
+    /**
+     * Resolve the configured payment method whitelist against the merchant's
+     * actual /payment_methods/ response, with preferred-method priority for
+     * the DuitNow QR and ShopeePay groups (mirrors chip-for-fluent-cart):
+     *
+     *   - DuitNow QR group: dnqr wins when both {duitnow_qr, dnqr} are present.
+     *   - Shopee Pay group: shopee_pay wins when both {razer_shopeepay, shopee_pay}
+     *     are present; razer_shopeepay is the fallback.
+     *
+     * @param array  $whitelist Configured payment_method_whitelist.
+     * @param string $currency  Order currency code (e.g. 'MYR').
+     * @param int    $amount    Order total in sen (e.g. 12345 = RM 123.45).
+     * @return array Final whitelist to send to CHIP.
+     */
+    public function resolvePaymentMethodGroups($whitelist, $currency, $amount)
+    {
+        $duitnow_group = array('duitnow_qr', 'dnqr');
+        $shopee_group = array('razer_shopeepay', 'shopee_pay');
+
+        $has_dnqr = count(array_intersect($whitelist, $duitnow_group)) > 0;
+        $has_shopee = count(array_intersect($whitelist, $shopee_group)) > 0;
+
+        // Short-circuit: no group member configured -> return untouched.
+        if (!$has_dnqr && !$has_shopee) {
+            return $whitelist;
+        }
+
+        $expanded = $whitelist;
+        if ($has_dnqr) {
+            $expanded = array_values(array_unique(array_merge($expanded, $duitnow_group)));
+        }
+        if ($has_shopee) {
+            $expanded = array_values(array_unique(array_merge($expanded, $shopee_group)));
+        }
+
+        $response = $this->getPaymentMethods($amount, $currency, '');
+        if (!is_array($response) || !isset($response['available_payment_methods'])) {
+            // API failed -> fallback to expanded whitelist unchanged.
+            return $expanded;
+        }
+        $available = $response['available_payment_methods'];
+
+        $resolved_dnqr = $has_dnqr ? array_values(array_intersect($duitnow_group, $available)) : array();
+        $resolved_shopee = $has_shopee ? array_values(array_intersect($shopee_group, $available)) : array();
+
+        // Priority: dnqr wins over duitnow_qr; shopee_pay wins over razer_shopeepay.
+        if (in_array('dnqr', $resolved_dnqr, true)) {
+            $resolved_dnqr = array_values(array_diff($resolved_dnqr, array('duitnow_qr')));
+        }
+        if (in_array('shopee_pay', $resolved_shopee, true)) {
+            $resolved_shopee = array_values(array_diff($resolved_shopee, array('razer_shopeepay')));
+        }
+
+        $all_groups = array_merge($duitnow_group, $shopee_group);
+        $final = array_values(array_diff($expanded, $all_groups));
+        $final = array_merge($final, $resolved_dnqr, $resolved_shopee);
+
+        return $final;
     }
 
     /**

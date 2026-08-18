@@ -65,9 +65,10 @@ class ChipPaymentModuleFrontController extends ModuleFrontController
      * (mirrors the WooCommerce gateway params).
      *
      * @param Cart $cart
+     * @param ChipApi $chip API client (used for payment method group resolution)
      * @return array
      */
-    protected function buildPurchaseParams(Cart $cart)
+    protected function buildPurchaseParams(Cart $cart, ChipApi $chip)
     {
         $currency = new Currency((int) $cart->id_currency);
         $iso_code = Validate::isLoadedObject($currency) ? strtolower($currency->iso_code) : 'myr';
@@ -195,7 +196,7 @@ class ChipPaymentModuleFrontController extends ModuleFrontController
             'success_redirect' => $callback_url,
             'failure_redirect' => $callback_url,
             'cancel_redirect' => $callback_url,
-            'creator_agent' => 'PrestaShop: 1.0.0',
+            'creator_agent' => 'PrestaShop: ' . Chip::CREATOR_AGENT_VERSION,
             'reference' => (string) $cart->id,
             'platform' => 'prestashop',
             'purchase' => array(
@@ -210,10 +211,16 @@ class ChipPaymentModuleFrontController extends ModuleFrontController
             'client' => $client,
         );
 
-        // Optional payment method whitelist from config
+        // Optional payment method whitelist from config.
+        // Resolve DuitNow QR / ShopeePay groups against the merchant's actual
+        // /payment_methods/ (dnqr > duitnow_qr, shopee_pay > razer_shopeepay).
         $whitelist = $this->module->getConfiguredWhitelist();
         if (count($whitelist) > 0) {
-            $params['payment_method_whitelist'] = $whitelist;
+            $params['payment_method_whitelist'] = $chip->resolvePaymentMethodGroups(
+                $whitelist,
+                $iso_code,
+                $total_override
+            );
         }
 
         return $params;
@@ -252,8 +259,8 @@ class ChipPaymentModuleFrontController extends ModuleFrontController
             return;
         }
 
-        $params = $this->buildPurchaseParams($cart);
         $chip = $this->module->getApi();
+        $params = $this->buildPurchaseParams($cart, $chip);
         $purchase = $chip->createPurchase($params);
 
         if (!is_array($purchase) || empty($purchase['id']) || empty($purchase['checkout_url'])) {

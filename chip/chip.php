@@ -49,7 +49,7 @@ class Chip extends PaymentModule
     public $module_key = 'YOUR_MODULE_KEY_FROM_PRESTASHOP_ADDONS';
 
     /** @var string Module version used in the creator_agent header */
-    const CREATOR_AGENT = 'PrestaShop: 1.0.1';
+    const CREATOR_AGENT_VERSION = '1.0.1';
 
     public function __construct()
     {

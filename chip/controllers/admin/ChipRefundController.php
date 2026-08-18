@@ -32,18 +32,18 @@ class ChipRefundController extends ModuleAdminController
 
         $order = new Order($id_order);
         if (!Validate::isLoadedObject($order) || $order->module !== $this->module->name) {
-            $this->ajaxDieJson(array('success' => false, 'message' => $this->l('Invalid order.')));
+            $this->ajaxDieJson(array('success' => false, 'message' => $this->module->l('Invalid order.')));
         }
 
         // The purchase id must match the one recorded on the order.
         if ($purchase_id === '' || $purchase_id !== $this->module->getOrderPurchaseId($order)) {
-            $this->ajaxDieJson(array('success' => false, 'message' => $this->l('No valid CHIP purchase found for this order.')));
+            $this->ajaxDieJson(array('success' => false, 'message' => $this->module->l('No valid CHIP purchase found for this order.')));
         }
 
         // Refund the full paid amount (sen).
         $amount_sen = (int) round((float) $order->total_paid * 100);
         if ($amount_sen <= 0) {
-            $this->ajaxDieJson(array('success' => false, 'message' => $this->l('Nothing to refund.')));
+            $this->ajaxDieJson(array('success' => false, 'message' => $this->module->l('Nothing to refund.')));
         }
 
         $chip = $this->module->getApi();
@@ -60,7 +60,7 @@ class ChipRefundController extends ModuleAdminController
             );
             $this->ajaxDieJson(array(
                 'success' => false,
-                'message' => $this->l('Refund failed. Check the CHIP dashboard for details.'),
+                'message' => $this->module->l('Refund failed. Check the CHIP dashboard for details.'),
             ));
         }
 
@@ -75,7 +75,7 @@ class ChipRefundController extends ModuleAdminController
 
         $this->ajaxDieJson(array(
             'success' => true,
-            'message' => $this->l('Refund request sent to CHIP. It will appear in the CHIP dashboard.'),
+            'message' => $this->module->l('Refund request sent to CHIP. It will appear in the CHIP dashboard.'),
         ));
     }
 
@@ -88,12 +88,18 @@ class ChipRefundController extends ModuleAdminController
         header('Content-Type: application/json');
 
         $chip = $this->module->getApi();
-        $methods = $chip->getPaymentMethods(1000, '', '');
+        // currency is mandatory for /payment_methods/; default to MYR when the
+        // shop has no currency context (e.g. direct AJAX call from config page).
+        $currency = 'MYR';
+        if (isset($this->context->currency) && Validate::isLoadedObject($this->context->currency)) {
+            $currency = strtoupper((string) $this->context->currency->iso_code);
+        }
+        $methods = $chip->getPaymentMethods(1000, $currency, '');
 
         if (!is_array($methods)) {
             $this->ajaxDieJson(array(
                 'success' => false,
-                'message' => $this->l('API connection failed. Check your Secret Key and Brand ID.'),
+                'message' => $this->module->l('API connection failed. Check your Secret Key and Brand ID.'),
             ));
         }
 
@@ -103,7 +109,7 @@ class ChipRefundController extends ModuleAdminController
 
         $this->ajaxDieJson(array(
             'success' => true,
-            'message' => sprintf($this->l('API connection OK (%d payment methods available).'), count($available)),
+            'message' => sprintf($this->module->l('API connection OK (%d payment methods available).'), count($available)),
         ));
     }
 
