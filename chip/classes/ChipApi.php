@@ -70,9 +70,10 @@ class ChipApi
      * @param array  $body   JSON body
      * @param array  $query  query params (time cache-bust is added automatically)
      *
-     * @return array|false decoded JSON response, or false on failure
+     * @return array|string|false decoded JSON response (array, raw string for
+     *                            e.g. /public_key/), or false on failure
      */
-    protected function request(string $method, string $path, array $body = [], array $query = []): array|false
+    protected function request(string $method, string $path, array $body = [], array $query = []): array|string|false
     {
         if ($method === 'GET') {
             $query['time'] = time();
@@ -137,7 +138,7 @@ class ChipApi
         }
 
         $decoded = json_decode($response, true);
-        if (!is_array($decoded)) {
+        if ($decoded === null) {
             PrestaShopLogger::addLog('CHIP: API returned invalid JSON for ' . $path . ' (status ' . $status . ')', 3, null, 'ChipApi', null, true);
 
             return false;
@@ -285,13 +286,26 @@ class ChipApi
         }
 
         $response = $this->request('GET', '/public_key/');
-        if (!is_array($response) || empty($response['key'])) {
+        if ($response === false || $response === null) {
             PrestaShopLogger::addLog('CHIP: Unable to fetch public key', 3, null, 'ChipApi', null, true);
 
             return false;
         }
 
-        $key = (string) $response['key'];
+        // The endpoint returns the PEM key either as a raw JSON string
+        // ("-----BEGIN PUBLIC KEY-----\n...") or as {"key": "..."}.
+        $key = '';
+        if (is_array($response)) {
+            $key = isset($response['key']) ? (string) $response['key'] : '';
+        } elseif (is_string($response)) {
+            $key = $response;
+        }
+        if ($key === '') {
+            PrestaShopLogger::addLog('CHIP: Unable to fetch public key', 3, null, 'ChipApi', null, true);
+
+            return false;
+        }
+
         // Normalize escaped newlines (mirrors the WooCommerce get_public_key behavior)
         $key = str_replace(['\r\n', '\n'], ["\r\n", "\n"], $key);
         Configuration::updateValue('CHIP_PUBLIC_KEY', $key);

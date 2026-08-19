@@ -31,20 +31,15 @@ class ChipCallbackModuleFrontController extends ModuleFrontController
     {
         $chip = $this->module->getApi();
 
-        $payment_id = (string) $this->context->cookie->chip_payment_id;
-        if ($payment_id === '') {
-            $payment_id = (string) Tools::getValue('payment_id', '');
-        }
-        if ($payment_id === '') {
-            $payment_id = (string) Tools::getValue('id', '');
-        }
-
         $content = file_get_contents('php://input');
         if ($content === false) {
             $content = '';
         }
         $signature = (string) ($_SERVER['HTTP_X_SIGNATURE'] ?? '');
 
+        // Prefer the signed payload; when the signature is missing or fails,
+        // fall back to the purchase id (cookie -> query -> webhook body) and
+        // fetch the actual status from the API.
         if ($signature !== '' && $chip->verifySignature($content, $signature)) {
             $payment = json_decode($content, true);
             if (is_array($payment) && !empty($payment['id'])) {
@@ -52,7 +47,7 @@ class ChipCallbackModuleFrontController extends ModuleFrontController
             }
         } elseif ($signature !== '') {
             PrestaShopLogger::addLog(
-                'CHIP: callback signature verification failed for purchase ' . $payment_id . ' - falling back to API',
+                'CHIP: callback signature verification failed - falling back to API',
                 2,
                 null,
                 'ChipCallback',
@@ -61,7 +56,21 @@ class ChipCallbackModuleFrontController extends ModuleFrontController
             );
         }
 
-        // Signature missing or failed -> fallback: fetch the actual status from the API.
+        $payment_id = (string) $this->context->cookie->chip_payment_id;
+        if ($payment_id === '') {
+            $payment_id = (string) Tools::getValue('payment_id', '');
+        }
+        if ($payment_id === '') {
+            $payment_id = (string) Tools::getValue('id', '');
+        }
+        if ($payment_id === '' && $content !== '') {
+            $body = json_decode($content, true);
+            if (is_array($body) && !empty($body['id'])) {
+                $payment_id = (string) $body['id'];
+            }
+        }
+
+        // Fallback: fetch the actual status from the API.
         if ($payment_id !== '') {
             $payment = $chip->getPurchase($payment_id);
             if (is_array($payment) && !empty($payment['id'])) {
