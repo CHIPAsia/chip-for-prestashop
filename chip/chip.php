@@ -23,7 +23,7 @@ class Chip extends PaymentModule
 
     public $version = '1.0.1';
 
-    public $author = 'CHIPAsia';
+    public $author = 'CHIP';
 
     public $need_instance = 1;
 
