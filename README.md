@@ -1,6 +1,6 @@
 # CHIP for PrestaShop
 
-CHIP payment gateway module for PrestaShop **1.7.0 – 9.1.4** (single module compatible across all versions, PHP 7.2+).
+CHIP payment gateway module for PrestaShop **9.0.0 – 9.x** (PHP 8.1+).
 
 > **Using PrestaShop 1.6?** This module is NOT compatible with 1.6 (1.6 uses a different `displayPayment` hook). Use **[chip-for-prestashop-1.6](https://github.com/CHIPAsia/chip-for-prestashop-1.6)** for PrestaShop 1.6.x.
 
@@ -8,8 +8,8 @@ Accept payments via CHIP Collect: FPX, FPX B2B1, DuitNow QR, Card, Atome, GrabPa
 
 ## Requirements
 
-- PrestaShop 1.7.0, 1.7.x, 8.x, or 9.1.x
-- PHP 7.2+ (PHP 8.x supported; no PHP 8-only syntax is used)
+- PrestaShop 9.0.0 or newer
+- PHP 8.1+ (PHP 8.x supported)
 - cURL extension (falls back to stream context when unavailable)
 - OpenSSL extension (webhook signature verification)
 - A CHIP brand with a **Secret Key** and **Brand ID** (see [docs.chip-in.asia](https://docs.chip-in.asia))
@@ -30,11 +30,9 @@ The module registers these hooks automatically:
 
 | Hook | Purpose |
 |------|---------|
-| `paymentOptions` | Payment option at checkout (1.7+) |
+| `paymentOptions` | Payment option at checkout |
 | `displayPaymentReturn` | Payment summary on the order confirmation page |
-| `displayAdminOrderSide` | Admin refund button (1.7.7+ / 8.x / 9.x) |
-| `displayAdminOrderMain` | Admin refund button (fallback location) |
-| `displayAdminOrderContentOrder` | Admin refund button for PrestaShop 1.7.0–1.7.6 |
+| `displayAdminOrderSide` | Admin refund button |
 
 ## Payment Flow
 
@@ -52,14 +50,14 @@ Built in `ChipPaymentModuleFrontController::buildPurchaseParams()` following `CH
 
 ```
 success_callback / success_redirect / failure_redirect / cancel_redirect → module callback URL (id_cart)
-creator_agent: 'PrestaShop: 1.0.0'
+creator_agent: 'PrestaShop: 1.0.1'
 reference: (string) id_cart
 platform: 'prestashop'
 purchase: {
   total_override: int sen (round(cart total × 100)),
   due_strict: from config,
   timezone: from config (default Asia/Kuala_Lumpur),
-  currency: cart currency ISO code (lowercase),
+  currency: cart currency ISO code (uppercase, e.g. MYR),
   language: 2-letter shop language ISO code,
   products: [{ name, price (sen), quantity }]
 }
@@ -81,9 +79,9 @@ Amounts are always integer **sen**. When a product's computed unit price is 0 (o
 - **Status `paid`**: checks `Order::getIdByCartId($id_cart)` first (idempotency — no double `validateOrder`), then calls:
   ```php
   $this->module->validateOrder($id_cart, Configuration::get('PS_OS_PAYMENT'), $total_paid,
-      $this->module->displayName, null, array(), null, false, $secure_key);
+      $this->module->displayName, null, array('transaction_id' => $purchase_id), null, false, $secure_key);
   ```
-  with the customer's `secure_key` (9 positional args — compatible with both the 1.7.8.11 and 9.1.4 signatures). The purchase id is passed via `$extra_vars['transaction_id']`, which `validateOrder` stores on the `order_payment` record (`$order->addOrderPayment(..., $transaction_id)` is called internally by `validateOrder` itself).
+  with the customer's `secure_key` (9 positional args). The purchase id is passed via `$extra_vars['transaction_id']`, which `validateOrder` stores on the `order_payment` record.
 - **Reference check**: the purchase `reference` must equal the `id_cart` being validated; a mismatch is rejected and logged.
 - **Success**: redirect to `order-confirmation?id_cart=…&id_module=…&key=<secure_key>`.
 - **Failed/cancel**: redirect back to the order page with a session error message (`chip_payment_error`).
@@ -91,14 +89,15 @@ Amounts are always integer **sen**. When a product's computed unit price is 0 (o
 
 ## Admin Refund
 
-On the order page (Back Office → Orders), a **Refund via CHIP** button is shown for CHIP orders via `displayAdminOrderSide` / `displayAdminOrderMain` (1.7.7+ / 8.x / 9.x) and `displayAdminOrderContentOrder` (1.7.0–1.7.6).
+On the order page (Back Office → Orders), a **Refund via CHIP** button is shown for CHIP orders via `displayAdminOrderSide`.
 
 The button POSTs to `controllers/admin/ChipRefundController.php` (`ajax=1&action=refund`) which:
 
 1. Loads the order and verifies it belongs to this module.
 2. Verifies the purchase id passed in matches the one recorded on the order.
 3. Calls `POST /purchases/{id}/refund/` with `{ "amount": <full paid amount in sen> }`.
-4. Returns a JSON result shown inline on the order page.
+4. On success, updates the order status to **Refunded** (`PS_OS_REFUND`).
+5. Returns a JSON result shown inline on the order page.
 
 The **Test API** button on the module configuration page uses the same controller (`action=testapi`) and calls `GET /payment_methods/?brand_id=…&amount=1000`.
 
@@ -113,33 +112,31 @@ All settings are stored with the `CHIP_` prefix:
 | Payment Method Whitelist | `CHIP_PAYMENT_METHOD_WHITELIST` | JSON array of method identifiers; empty = all |
 | Due Strict | `CHIP_DUE_STRICT` | 0/1 |
 | Purchase Timezone | `CHIP_PURCHASE_TIME_ZONE` | default `Asia/Kuala_Lumpur` |
+| Checkout Text | `CHIP_CHECKOUT_TEXT` | custom text shown under "Pay with CHIP"; empty = list configured methods |
 | Public Key (cache) | `CHIP_PUBLIC_KEY` | cached webhook verification key |
 
 ## Compatibility Matrix
 
 | PrestaShop | Payment Option | displayPaymentReturn | Admin Refund Hooks | validateOrder | Notes |
 |------------|----------------|----------------------|--------------------|---------------|-------|
-| 1.7.0 – 1.7.6 | `paymentOptions` | `params['order']` | `displayAdminOrderContentOrder` | 9 args OK | |
-| 1.7.7 – 1.7.8.x | `paymentOptions` | `params['order']` | `displayAdminOrderSide` / `displayAdminOrderMain` | 9 args OK | |
-| 8.x | `paymentOptions` | `params['order']` | `displayAdminOrderSide` / `displayAdminOrderMain` | 9 args OK | |
-| 9.0 – 9.1.4 | `paymentOptions` | `params['order']` | `displayAdminOrderSide` / `displayAdminOrderMain` | 9 args OK (10th/11th optional) | |
+| 9.0 – 9.1.x | `paymentOptions` | `params['order']` | `displayAdminOrderSide` | 9 args OK (10th/11th optional) | |
 
-Verified against the 1.7.8.11 and 9.1.4 code bases:
+Verified against the 9.1.4 code base:
 
-- `PaymentOption` (`src/Core/Payment/PaymentOption.php`) has identical setters (`setCallToActionText`, `setModuleName`, `setLogo`, `setAction`, `setAdditionalInformation`) in both.
-- `validateOrder` in 9.1.4 appends `?Shop $shop = null, ?string $order_reference = null` — both optional, so the 9-arg 1.7 call is compatible.
-- `Order::getByCartId` exists in both; `Order::getIdByCartId` (used by this module) exists in both.
-- `displayPaymentReturn` receives `['order' => Order]` in both 1.7.8.11 and 9.1.4.
-- `Tools::redirect` exists in both (`Tools::redirectLink` was removed in 9.x — not used).
-- Legacy admin AJAX (`ajax=1&action=refund` → `ajaxProcessRefund`) is dispatched by the legacy AdminController flow in 1.7 and by `LegacyController` in 9.x.
-- No PHP 8-only syntax (`?->`, `match`, constructor promotion, typed properties) — PHP 7.2+ safe.
+- `PaymentOption` (`src/Core/Payment/PaymentOption.php`) exposes the setters used by this module.
+- `validateOrder` appends `?Shop $shop = null, ?string $order_reference = null` — both optional, so the 9-arg call is compatible.
+- `Order::getIdByCartId` (used by this module) exists.
+- `displayPaymentReturn` receives `['order' => Order]`.
+- `Tools::jsonDecode/jsonEncode` were removed in 9.x — the module uses native `json_decode`/`json_encode`.
+- Legacy admin AJAX (`ajax=1&action=refund` → `ajaxProcessRefund`) is dispatched by `LegacyController`.
+- PHP 8.1+ optimized (typed properties where allowed, union types, null coalescing, short arrays).
 
 ## Limitations
 
 - The module implements one-off payments only (no recurring/subscription support).
 - No partial refunds from the admin — the button refunds the full paid amount. Partial refunds can be done in the CHIP dashboard.
 - Guest checkout: the customer must be logged in when the payment is initiated; cart ownership is enforced against the session customer.
-- Refund state is not synced back from CHIP to the PrestaShop order status automatically; the refund appears in the CHIP dashboard.
+- The admin refund button updates the PrestaShop order to **Refunded** after a successful CHIP refund. Refunds initiated from the CHIP dashboard (outside PrestaShop) are not auto-synced back.
 - `displayPaymentReturn` shows the payment summary; no additional order-state changes are made by the hook.
 
 ## Development

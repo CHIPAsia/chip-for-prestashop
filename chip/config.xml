@@ -2,8 +2,8 @@
 <module>
 	<name>chip</name>
 	<displayName><![CDATA[CHIP]]></displayName>
-	<version><![CDATA[1.0.0]]></version>
-	<author><![CDATA[CHIPAsia]]></author>
+	<version><![CDATA[1.1.0]]></version>
+	<author><![CDATA[CHIP]]></author>
 	<tab><![CDATA[payments_gateways]]></tab>
 	<is_configurable>1</is_configurable>
 	<need_instance>1</need_instance>
