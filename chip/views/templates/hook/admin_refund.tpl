@@ -1,6 +1,5 @@
 {*
- * CHIP for PrestaShop - admin refund button (displayAdminOrderSide /
- * displayAdminOrderMain / displayAdminOrderContentOrder).
+ * CHIP for PrestaShop - admin refund button (displayAdminOrderSide).
  * Posts to the ChipRefund admin controller (ajax=1&action=refund).
  *}
 <div class="panel" id="chip-admin-refund">
@@ -22,6 +21,10 @@
 </div>
 <script type="text/javascript">
 (function () {
+  if (window.__chipRefundBound) {
+    return;
+  }
+  window.__chipRefundBound = true;
   var button = document.getElementById('chip-refund-button');
   if (!button) {
     return;

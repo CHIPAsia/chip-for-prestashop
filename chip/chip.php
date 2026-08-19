@@ -62,8 +62,6 @@ class Chip extends PaymentModule
         $this->registerHook('paymentOptions');
         $this->registerHook('displayPaymentReturn');
         $this->registerHook('displayAdminOrderSide');
-        $this->registerHook('displayAdminOrderMain');
-        $this->registerHook('displayAdminOrderContentOrder');
 
         // Hidden admin tab that routes the refund + test-api AJAX actions
         // to controllers/admin/ChipRefundController.php (the 9.x Symfony
@@ -223,31 +221,7 @@ class Chip extends PaymentModule
     }
 
     /**
-     * Hook displayAdminOrderMain (9.x) - refund button (fallback location).
-     *
-     * @param array $params
-     *
-     * @return string HTML
-     */
-    public function hookDisplayAdminOrderMain(array $params): string
-    {
-        return $this->renderAdminRefund($params);
-    }
-
-    /**
-     * Hook displayAdminOrderContentOrder - refund button (legacy location).
-     *
-     * @param array $params
-     *
-     * @return string HTML
-     */
-    public function hookDisplayAdminOrderContentOrder(array $params): string
-    {
-        return $this->renderAdminRefund($params);
-    }
-
-    /**
-     * Build the admin refund block (single implementation shared by the three hooks).
+     * Build the admin refund block (single implementation shared by the hooks).
      *
      * @param array $params
      *
