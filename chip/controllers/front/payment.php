@@ -70,7 +70,7 @@ class ChipPaymentModuleFrontController extends ModuleFrontController
     protected function buildPurchaseParams(Cart $cart, ChipApi $chip): array
     {
         $currency = new Currency((int) $cart->id_currency);
-        $iso_code = Validate::isLoadedObject($currency) ? strtolower($currency->iso_code) : 'myr';
+        $iso_code = Validate::isLoadedObject($currency) ? strtoupper($currency->iso_code) : 'MYR';
 
         $language_code = 'en';
         if (isset($this->context->language) && Validate::isLoadedObject($this->context->language)) {
