@@ -63,6 +63,10 @@ class Chip extends PaymentModule
         $this->registerHook('displayPaymentReturn');
         $this->registerHook('displayAdminOrderSide');
 
+        // Remove hooks registered by earlier versions (duplicate refund button).
+        $this->unregisterHook('displayAdminOrderMain');
+        $this->unregisterHook('displayAdminOrderContentOrder');
+
         // Hidden admin tab that routes the refund + test-api AJAX actions
         // to controllers/admin/ChipRefundController.php (the 9.x Symfony
         // legacy router resolves module tabs from the tab table).
