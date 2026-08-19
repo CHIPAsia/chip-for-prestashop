@@ -17,11 +17,11 @@ if (!defined('_PS_VERSION_')) {
 
 class ChipPaymentModuleFrontController extends ModuleFrontController
 {
-    public bool $ssl = true;
+    public $ssl = true;
 
-    public bool $display_column_left = false;
+    public $display_column_left = false;
 
-    public bool $display_column_right = false;
+    public $display_column_right = false;
 
     /**
      * Validate that the requested cart belongs to the current customer.

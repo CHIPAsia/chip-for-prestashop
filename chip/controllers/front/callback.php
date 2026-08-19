@@ -19,7 +19,7 @@ if (!defined('_PS_VERSION_')) {
 
 class ChipCallbackModuleFrontController extends ModuleFrontController
 {
-    public bool $ssl = true;
+    public $ssl = true;
 
     /**
      * Verify the webhook signature (X-Signature) against the raw body.
