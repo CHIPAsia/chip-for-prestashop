@@ -139,7 +139,7 @@ Verified against the 1.7.8.11 and 9.1.4 code bases:
 - The module implements one-off payments only (no recurring/subscription support).
 - No partial refunds from the admin — the button refunds the full paid amount. Partial refunds can be done in the CHIP dashboard.
 - Guest checkout: the customer must be logged in when the payment is initiated; cart ownership is enforced against the session customer.
-- Refund state is not synced back from CHIP to the PrestaShop order status automatically; the refund appears in the CHIP dashboard.
+- The admin refund button updates the PrestaShop order to **Refunded** after a successful CHIP refund. Refunds initiated from the CHIP dashboard (outside PrestaShop) are not auto-synced back.
 - `displayPaymentReturn` shows the payment summary; no additional order-state changes are made by the hook.
 
 ## Development
