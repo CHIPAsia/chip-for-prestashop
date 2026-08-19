@@ -1,7 +1,7 @@
 {*
  * CHIP for PrestaShop - configuration form (rendered by getContent()).
  * Plain HTML form - avoids HelperForm template resolution issues on
- * PrestaShop 9.x while staying compatible with 1.7.x.
+ * PrestaShop 9.x (plain HTML - avoids HelperForm template resolution issues).
  *}
 <div class="panel">
   <div class="panel-heading">

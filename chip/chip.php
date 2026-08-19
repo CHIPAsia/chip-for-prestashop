@@ -21,7 +21,7 @@ class Chip extends PaymentModule
 
     public $tab = 'payments_gateways';
 
-    public $version = '1.0.1';
+    public $version = '1.1.0';
 
     public $author = 'CHIP';
 
@@ -42,7 +42,7 @@ class Chip extends PaymentModule
     public $module_key = 'YOUR_MODULE_KEY_FROM_PRESTASHOP_ADDONS';
 
     /** @var string Module version used in the creator_agent header */
-    public const CREATOR_AGENT_VERSION = '1.0.1';
+    public const CREATOR_AGENT_VERSION = '1.1.0';
 
     public function __construct()
     {

@@ -1,5 +1,33 @@
 == Changelog ==
 
+## [1.1.0] - 2026-08-19
+
+### Added
+- PrestaShop 9.0+ support only (dropped 1.7/8.x - API differences too large); `ps_versions_compliancy` min 9.0.0.
+- PHP 8.1+ optimized code (`declare(strict_types=1)`, typed properties where allowed, union types, null coalescing, short arrays).
+- `CHIP_CHECKOUT_TEXT` config: merchant-customisable text under "Pay with CHIP"; empty = list configured payment methods.
+- Admin refund now sets the PrestaShop order to **Refunded** (`PS_OS_REFUND`) after a successful CHIP refund.
+- DuitNow QR / ShopeePay group resolution (dnqr > duitnow_qr, shopee_pay > razer_shopeepay) via `/payment_methods/` (mirrors chip-for-fluent-cart).
+
+### Changed
+- Removed logo from the checkout PaymentOption (text-only "Pay with CHIP"); logo kept on the payment methods page.
+- Module author set to `CHIP` (was CHIPAsia).
+- Admin refund button registered on `displayAdminOrderSide` only (fixes duplicate buttons on the 9.x order page).
+- Removed typed properties on properties inherited from core controllers (PHP forbids overriding untyped parent properties with typed ones).
+
+### Fixed
+- `Tools::jsonDecode`/`jsonEncode` replaced with native functions (removed in PrestaShop 9.x) - fixed fatal error on the config page.
+- `HelperForm` template resolution on 9.x - replaced with a plain HTML config form.
+- Currency code sent uppercase (`MYR`, not `myr`) - CHIP API rejected lowercase codes.
+- Webhook signature verification: `/public_key/` returns the PEM as a raw JSON string; `getPublicKey()` now handles both shapes.
+- Webhook fallback: purchase id resolved from the webhook body when there is no session cookie.
+- `ChipRefundController` uses `$this->module->l()` (no `l()` on `ModuleAdminController` in 9.x).
+- Test API button sends a valid currency (`/payment_methods/` requires it).
+- PHP 8.5 deprecation warnings (`curl_close`, `$http_response_header`).
+- `getApi()` explicitly requires `ChipApi` (avoids `ClassNotFoundError` when the class index is stale).
+- Admin refund script made idempotent (single confirm dialog).
+- Module version/author kept in sync (`config.xml` = `chip.php`).
+
 ## [1.0.1] - 2026-08-18
 
 ### Fixed
@@ -16,11 +44,11 @@
 ## [1.0.0] - 2026-08-18
 
 ### Added
-- CHIP Collect payment gateway module for PrestaShop 1.7 – 9.x (single module).
+- CHIP Collect payment gateway module for PrestaShop (single module).
 - Checkout payment option (`paymentOptions` hook) with configurable payment method whitelist.
 - Payment flow: create purchase via `POST /purchases/`, redirect to CHIP checkout page.
 - Webhook callback with X-Signature verification (RSA SHA-256) and API fallback (`GET /purchases/{id}/`).
 - Idempotent order validation (`validateOrder` with `extra_vars['transaction_id']`).
-- Admin refund button on the order page (`displayAdminOrderSide` / `displayAdminOrderMain` / `displayAdminOrderContentOrder`), full-amount refund via `POST /purchases/{id}/refund/`.
+- Admin refund button on the order page, full-amount refund via `POST /purchases/{id}/refund/`.
 - "Test API" button on the configuration page (`GET /payment_methods/?amount=1000`).
 - Payment method display names per CHIP-API-SPEC.md (FPX, FPX B2B1, DuitNow QR, Card, Atome, GrabPay, Maybank QR, ShopeePay, Touch 'n Go, Crypto Coin).
