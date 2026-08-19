@@ -11,14 +11,15 @@
  * @license http://opensource.org/licenses/osl-3.0.php Open Software License (OSL 3.0)
  */
 
+declare(strict_types=1);
+
 if (!defined('_PS_VERSION_')) {
     exit;
 }
 
 class ChipCallbackModuleFrontController extends ModuleFrontController
 {
-    /** @var bool */
-    public $ssl = true;
+    public bool $ssl = true;
 
     /**
      * Verify the webhook signature (X-Signature) against the raw body.
@@ -26,7 +27,7 @@ class ChipCallbackModuleFrontController extends ModuleFrontController
      *
      * @return array|false payment data, or false
      */
-    protected function getPaymentData()
+    protected function getPaymentData(): array|false
     {
         $chip = $this->module->getApi();
 
@@ -42,7 +43,7 @@ class ChipCallbackModuleFrontController extends ModuleFrontController
         if ($content === false) {
             $content = '';
         }
-        $signature = isset($_SERVER['HTTP_X_SIGNATURE']) ? (string) $_SERVER['HTTP_X_SIGNATURE'] : '';
+        $signature = (string) ($_SERVER['HTTP_X_SIGNATURE'] ?? '');
 
         if ($signature !== '' && $chip->verifySignature($content, $signature)) {
             $payment = json_decode($content, true);
@@ -74,14 +75,10 @@ class ChipCallbackModuleFrontController extends ModuleFrontController
     /**
      * Validate the order for a paid purchase (idempotent - never double validate).
      *
-     * @param int $id_cart
-     * @param float $total_paid
-     * @param string $purchase_id
      * @return bool true when validated (or already validated)
      */
-    protected function validatePaidOrder($id_cart, $total_paid, $purchase_id)
+    protected function validatePaidOrder(int $id_cart, float $total_paid, string $purchase_id): bool
     {
-        $id_cart = (int) $id_cart;
         if ($id_cart <= 0) {
             return false;
         }
@@ -115,10 +112,10 @@ class ChipCallbackModuleFrontController extends ModuleFrontController
             $this->module->validateOrder(
                 $id_cart,
                 (int) Configuration::get('PS_OS_PAYMENT'),
-                (float) $total_paid,
+                $total_paid,
                 $this->module->displayName,
                 null,
-                array('transaction_id' => (string) $purchase_id),
+                ['transaction_id' => $purchase_id],
                 null,
                 false,
                 $secure_key
@@ -152,9 +149,8 @@ class ChipCallbackModuleFrontController extends ModuleFrontController
      * Extract the purchase reference so the callback can be bound to the cart.
      *
      * @param array $payment
-     * @return string
      */
-    protected function getPaymentReference($payment)
+    protected function getPaymentReference(array $payment): string
     {
         if (isset($payment['reference']) && $payment['reference'] !== '') {
             return (string) $payment['reference'];
@@ -166,7 +162,7 @@ class ChipCallbackModuleFrontController extends ModuleFrontController
         return '';
     }
 
-    public function postProcess()
+    public function postProcess(): void
     {
         $id_cart = (int) Tools::getValue('id_cart', 0);
         if (!$id_cart) {
@@ -185,7 +181,7 @@ class ChipCallbackModuleFrontController extends ModuleFrontController
         }
 
         $purchase_id = (string) $payment['id'];
-        $status = isset($payment['status']) ? (string) $payment['status'] : '';
+        $status = (string) ($payment['status'] ?? '');
 
         // Security: the purchase must reference the cart being validated.
         $payment_reference = $this->getPaymentReference($payment);
@@ -268,7 +264,7 @@ class ChipCallbackModuleFrontController extends ModuleFrontController
         Tools::redirect($this->context->link->getPageLink('order', true));
     }
 
-    public function initContent()
+    public function initContent(): void
     {
         parent::initContent();
     }

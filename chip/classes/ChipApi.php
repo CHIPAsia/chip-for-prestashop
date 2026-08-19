@@ -2,12 +2,14 @@
 /**
  * CHIP for PrestaShop - CHIP Collect API client.
  *
- * PHP 7.2+ compatible. Singleton keyed by md5(secret_key . brand_id) so that
+ * PHP 8.1+ optimized. Singleton keyed by md5(secret_key . brand_id) so that
  * different credentials get different instances (see CHIP-API-SPEC.md).
  *
  * @author CHIPAsia
  * @license http://opensource.org/licenses/osl-3.0.php Open Software License (OSL 3.0)
  */
+
+declare(strict_types=1);
 
 if (!defined('_PS_VERSION_')) {
     exit;
@@ -15,41 +17,31 @@ if (!defined('_PS_VERSION_')) {
 
 class ChipApi
 {
-    const API_BASE = 'https://gate.chip-in.asia/api/v1';
+    public const API_BASE = 'https://gate.chip-in.asia/api/v1';
 
-    /** @var string */
-    protected $secret_key;
+    protected string $secret_key;
 
-    /** @var string */
-    protected $brand_id;
+    protected string $brand_id;
 
-    /** @var int */
-    protected $timeout = 15;
+    protected int $timeout = 15;
 
-    /** @var array of ChipApi instances keyed by md5(secret_key . brand_id) */
-    protected static $instances = array();
+    /** @var array<string, ChipApi> instances keyed by md5(secret_key . brand_id) */
+    protected static array $instances = [];
 
-    protected function __construct($secret_key, $brand_id)
+    protected function __construct(string $secret_key, string $brand_id)
     {
         $this->secret_key = $secret_key;
         $this->brand_id = $brand_id;
     }
 
     /**
-     * Singleton: credentials berbeza => instance berbeza.
-     *
-     * @param string $secret_key
-     * @param string $brand_id
-     * @return ChipApi
+     * Singleton: different credentials => different instance.
      */
-    public static function getInstance($secret_key, $brand_id)
+    public static function getInstance(string $secret_key, string $brand_id): self
     {
         $key = md5($secret_key . '|' . $brand_id);
-        if (!isset(self::$instances[$key])) {
-            self::$instances[$key] = new self($secret_key, $brand_id);
-        }
 
-        return self::$instances[$key];
+        return self::$instances[$key] ??= new self($secret_key, $brand_id);
     }
 
     /**
@@ -57,13 +49,12 @@ class ChipApi
      * requests (see CHIP-API-SPEC.md).
      *
      * @param string $path e.g. /purchases/
-     * @param array $params
-     * @return string
+     * @param array  $params
      */
-    protected function buildUrl($path, $params = array())
+    protected function buildUrl(string $path, array $params = []): string
     {
         $url = self::API_BASE . '/' . ltrim($path, '/');
-        if (!empty($params)) {
+        if ($params !== []) {
             $url .= '?' . http_build_query($params);
         }
 
@@ -75,12 +66,13 @@ class ChipApi
      * Prefers cURL, falls back to a stream context.
      *
      * @param string $method GET or POST
-     * @param string $path API path
-     * @param array $body JSON body
-     * @param array $query query params (time cache-bust is added automatically)
+     * @param string $path   API path
+     * @param array  $body   JSON body
+     * @param array  $query  query params (time cache-bust is added automatically)
+     *
      * @return array|false decoded JSON response, or false on failure
      */
-    protected function request($method, $path, $body = array(), $query = array())
+    protected function request(string $method, string $path, array $body = [], array $query = []): array|false
     {
         if ($method === 'GET') {
             $query['time'] = time();
@@ -88,11 +80,11 @@ class ChipApi
 
         $url = $this->buildUrl($path, $query);
         $json = json_encode($body);
-        $headers = array(
+        $headers = [
             'Authorization: Bearer ' . $this->secret_key,
             'Content-Type: application/json',
             'Accept: application/json',
-        );
+        ];
 
         $response = false;
         $status = 0;
@@ -112,33 +104,28 @@ class ChipApi
             }
             $response = curl_exec($curl);
             $status = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
-            if (PHP_VERSION_ID < 80000) {
-                curl_close($curl);
-            }
         } else {
-            $context = stream_context_create(array(
-                'http' => array(
+            $context = stream_context_create([
+                'http' => [
                     'method' => $method,
                     'header' => implode("\r\n", $headers),
                     'content' => $json,
                     'timeout' => $this->timeout,
                     'ignore_errors' => true,
-                ),
-                'ssl' => array(
+                ],
+                'ssl' => [
                     'verify_peer' => true,
                     'verify_peer_name' => true,
-                ),
-            ));
+                ],
+            ]);
             $response = @file_get_contents($url, false, $context);
             $response_headers = function_exists('http_get_last_response_headers')
                 ? http_get_last_response_headers()
-                : (isset($http_response_header) ? $http_response_header : array());
-            if (is_array($response_headers)) {
-                foreach ($response_headers as $header_line) {
-                    if (preg_match('/^HTTP\/\S+\s+(\d{3})/', $header_line, $matches)) {
-                        $status = (int) $matches[1];
-                        break;
-                    }
+                : ($http_response_header ?? []);
+            foreach ($response_headers as $header_line) {
+                if (preg_match('/^HTTP\/\S+\s+(\d{3})/', $header_line, $matches)) {
+                    $status = (int) $matches[1];
+                    break;
                 }
             }
         }
@@ -163,9 +150,10 @@ class ChipApi
      * Create a purchase (payment).
      *
      * @param array $params payment params (see CHIP-API-SPEC.md)
+     *
      * @return array|false purchase data, or false on error
      */
-    public function createPurchase($params)
+    public function createPurchase(array $params): array|false
     {
         return $this->request('POST', '/purchases/', $params);
     }
@@ -173,12 +161,11 @@ class ChipApi
     /**
      * Fetch a purchase by ID.
      *
-     * @param string $purchase_id
      * @return array|false purchase data, or false on error
      */
-    public function getPurchase($purchase_id)
+    public function getPurchase(string $purchase_id): array|false
     {
-        if (empty($purchase_id)) {
+        if ($purchase_id === '') {
             return false;
         }
 
@@ -188,19 +175,17 @@ class ChipApi
     /**
      * Refund a purchase. Amount is in sen (minor units).
      *
-     * @param string $purchase_id
-     * @param int $amount_sen
      * @return array|false refund data, or false on error
      */
-    public function refundPurchase($purchase_id, $amount_sen)
+    public function refundPurchase(string $purchase_id, int $amount_sen): array|false
     {
-        if (empty($purchase_id) || (int) $amount_sen <= 0) {
+        if ($purchase_id === '' || $amount_sen <= 0) {
             return false;
         }
 
-        return $this->request('POST', '/purchases/' . rawurlencode($purchase_id) . '/refund/', array(
-            'amount' => (int) $amount_sen,
-        ));
+        return $this->request('POST', '/purchases/' . rawurlencode($purchase_id) . '/refund/', [
+            'amount' => $amount_sen,
+        ]);
     }
 
     /**
@@ -208,17 +193,14 @@ class ChipApi
      * `amount` is mandatory (in sen); use 1000 (RM 10) as the safe default for
      * availability checks so that all methods are returned (see CHIP-API-SPEC.md).
      *
-     * @param int $amount_sen
-     * @param string $currency optional ISO 4217 code
-     * @param string $language optional 2-letter ISO code
      * @return array|false list of payment methods, or false on error
      */
-    public function getPaymentMethods($amount_sen = 1000, $currency = '', $language = '')
+    public function getPaymentMethods(int $amount_sen = 1000, string $currency = '', string $language = ''): array|false
     {
-        $query = array(
+        $query = [
             'brand_id' => $this->brand_id,
-            'amount' => (int) $amount_sen,
-        );
+            'amount' => $amount_sen,
+        ];
         if ($currency !== '') {
             $query['currency'] = $currency;
         }
@@ -226,7 +208,7 @@ class ChipApi
             $query['language'] = $language;
         }
 
-        return $this->request('GET', '/payment_methods/', array(), $query);
+        return $this->request('GET', '/payment_methods/', [], $query);
     }
 
     /**
@@ -241,12 +223,13 @@ class ChipApi
      * @param array  $whitelist Configured payment_method_whitelist.
      * @param string $currency  Order currency code (e.g. 'MYR').
      * @param int    $amount    Order total in sen (e.g. 12345 = RM 123.45).
+     *
      * @return array Final whitelist to send to CHIP.
      */
-    public function resolvePaymentMethodGroups($whitelist, $currency, $amount)
+    public function resolvePaymentMethodGroups(array $whitelist, string $currency, int $amount): array
     {
-        $duitnow_group = array('duitnow_qr', 'dnqr');
-        $shopee_group = array('razer_shopeepay', 'shopee_pay');
+        $duitnow_group = ['duitnow_qr', 'dnqr'];
+        $shopee_group = ['razer_shopeepay', 'shopee_pay'];
 
         $has_dnqr = count(array_intersect($whitelist, $duitnow_group)) > 0;
         $has_shopee = count(array_intersect($whitelist, $shopee_group)) > 0;
@@ -271,22 +254,21 @@ class ChipApi
         }
         $available = $response['available_payment_methods'];
 
-        $resolved_dnqr = $has_dnqr ? array_values(array_intersect($duitnow_group, $available)) : array();
-        $resolved_shopee = $has_shopee ? array_values(array_intersect($shopee_group, $available)) : array();
+        $resolved_dnqr = $has_dnqr ? array_values(array_intersect($duitnow_group, $available)) : [];
+        $resolved_shopee = $has_shopee ? array_values(array_intersect($shopee_group, $available)) : [];
 
         // Priority: dnqr wins over duitnow_qr; shopee_pay wins over razer_shopeepay.
         if (in_array('dnqr', $resolved_dnqr, true)) {
-            $resolved_dnqr = array_values(array_diff($resolved_dnqr, array('duitnow_qr')));
+            $resolved_dnqr = array_values(array_diff($resolved_dnqr, ['duitnow_qr']));
         }
         if (in_array('shopee_pay', $resolved_shopee, true)) {
-            $resolved_shopee = array_values(array_diff($resolved_shopee, array('razer_shopeepay')));
+            $resolved_shopee = array_values(array_diff($resolved_shopee, ['razer_shopeepay']));
         }
 
         $all_groups = array_merge($duitnow_group, $shopee_group);
         $final = array_values(array_diff($expanded, $all_groups));
-        $final = array_merge($final, $resolved_dnqr, $resolved_shopee);
 
-        return $final;
+        return array_merge($final, $resolved_dnqr, $resolved_shopee);
     }
 
     /**
@@ -295,7 +277,7 @@ class ChipApi
      *
      * @return string|false PEM public key
      */
-    public function getPublicKey()
+    public function getPublicKey(): string|false
     {
         $cached = Configuration::get('CHIP_PUBLIC_KEY');
         if (!empty($cached)) {
@@ -311,7 +293,7 @@ class ChipApi
 
         $key = (string) $response['key'];
         // Normalize escaped newlines (mirrors the WooCommerce get_public_key behavior)
-        $key = str_replace(array('\r\n', '\n'), array("\r\n", "\n"), $key);
+        $key = str_replace(['\r\n', '\n'], ["\r\n", "\n"], $key);
         Configuration::updateValue('CHIP_PUBLIC_KEY', $key);
 
         return $key;
@@ -320,11 +302,10 @@ class ChipApi
     /**
      * Verify the X-Signature header against the raw callback body.
      *
-     * @param string $content raw request body
+     * @param string $content   raw request body
      * @param string $signature base64 encoded signature from X-Signature header
-     * @return bool
      */
-    public function verifySignature($content, $signature)
+    public function verifySignature(string $content, string $signature): bool
     {
         $public_key = $this->getPublicKey();
         if ($public_key === false) {

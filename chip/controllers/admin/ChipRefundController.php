@@ -7,12 +7,14 @@
  * displayAdminOrderContentOrder), and the "Test API" action used from the
  * module configuration page (action=testapi&ajax=1).
  *
- * Compatible with PrestaShop 1.7.0 - 9.1.4 (legacy AdminController AJAX flow:
+ * Compatible with PrestaShop 9.x (legacy AdminController AJAX flow:
  * `ajax=1&action=xxx` maps to ajaxProcessXxx via Tools::toCamelCase).
  *
  * @author CHIPAsia
  * @license http://opensource.org/licenses/osl-3.0.php Open Software License (OSL 3.0)
  */
+
+declare(strict_types=1);
 
 if (!defined('_PS_VERSION_')) {
     exit;
@@ -23,7 +25,7 @@ class ChipRefundController extends ModuleAdminController
     /**
      * Process a refund request: POST /purchases/{id}/refund/ with amount in sen.
      */
-    public function ajaxProcessRefund()
+    public function ajaxProcessRefund(): void
     {
         header('Content-Type: application/json');
 
@@ -32,18 +34,18 @@ class ChipRefundController extends ModuleAdminController
 
         $order = new Order($id_order);
         if (!Validate::isLoadedObject($order) || $order->module !== $this->module->name) {
-            $this->ajaxDieJson(array('success' => false, 'message' => $this->module->l('Invalid order.')));
+            $this->ajaxDieJson(['success' => false, 'message' => $this->module->l('Invalid order.')]);
         }
 
         // The purchase id must match the one recorded on the order.
         if ($purchase_id === '' || $purchase_id !== $this->module->getOrderPurchaseId($order)) {
-            $this->ajaxDieJson(array('success' => false, 'message' => $this->module->l('No valid CHIP purchase found for this order.')));
+            $this->ajaxDieJson(['success' => false, 'message' => $this->module->l('No valid CHIP purchase found for this order.')]);
         }
 
         // Refund the full paid amount (sen).
         $amount_sen = (int) round((float) $order->total_paid * 100);
         if ($amount_sen <= 0) {
-            $this->ajaxDieJson(array('success' => false, 'message' => $this->module->l('Nothing to refund.')));
+            $this->ajaxDieJson(['success' => false, 'message' => $this->module->l('Nothing to refund.')]);
         }
 
         $chip = $this->module->getApi();
@@ -58,10 +60,10 @@ class ChipRefundController extends ModuleAdminController
                 $id_order,
                 true
             );
-            $this->ajaxDieJson(array(
+            $this->ajaxDieJson([
                 'success' => false,
                 'message' => $this->module->l('Refund failed. Check the CHIP dashboard for details.'),
-            ));
+            ]);
         }
 
         PrestaShopLogger::addLog(
@@ -73,17 +75,17 @@ class ChipRefundController extends ModuleAdminController
             true
         );
 
-        $this->ajaxDieJson(array(
+        $this->ajaxDieJson([
             'success' => true,
             'message' => $this->module->l('Refund request sent to CHIP. It will appear in the CHIP dashboard.'),
-        ));
+        ]);
     }
 
     /**
      * Test API connectivity: GET /payment_methods/ with amount=1000 (safe
      * default so all methods are returned, see CHIP-API-SPEC.md).
      */
-    public function ajaxProcessTestapi()
+    public function ajaxProcessTestapi(): void
     {
         header('Content-Type: application/json');
 
@@ -97,20 +99,20 @@ class ChipRefundController extends ModuleAdminController
         $methods = $chip->getPaymentMethods(1000, $currency, '');
 
         if (!is_array($methods)) {
-            $this->ajaxDieJson(array(
+            $this->ajaxDieJson([
                 'success' => false,
                 'message' => $this->module->l('API connection failed. Check your Secret Key and Brand ID.'),
-            ));
+            ]);
         }
 
-        $available = isset($methods['available_payment_methods']) && is_array($methods['available_payment_methods'])
+        $available = is_array($methods['available_payment_methods'] ?? null)
             ? $methods['available_payment_methods']
-            : array();
+            : [];
 
-        $this->ajaxDieJson(array(
+        $this->ajaxDieJson([
             'success' => true,
             'message' => sprintf($this->module->l('API connection OK (%d payment methods available).'), count($available)),
-        ));
+        ]);
     }
 
     /**
@@ -118,7 +120,7 @@ class ChipRefundController extends ModuleAdminController
      *
      * @param array $data
      */
-    protected function ajaxDieJson($data)
+    protected function ajaxDieJson(array $data): void
     {
         echo json_encode($data);
         die();

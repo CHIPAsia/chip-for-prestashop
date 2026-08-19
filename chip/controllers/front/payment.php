@@ -9,34 +9,33 @@
  * @license http://opensource.org/licenses/osl-3.0.php Open Software License (OSL 3.0)
  */
 
+declare(strict_types=1);
+
 if (!defined('_PS_VERSION_')) {
     exit;
 }
 
 class ChipPaymentModuleFrontController extends ModuleFrontController
 {
-    /** @var bool */
-    public $ssl = true;
+    public bool $ssl = true;
 
-    /** @var bool */
-    public $display_column_left = false;
+    public bool $display_column_left = false;
 
-    /** @var bool */
-    public $display_column_right = false;
+    public bool $display_column_right = false;
 
     /**
      * Validate that the requested cart belongs to the current customer.
      *
      * @return Cart|false
      */
-    protected function getValidCart()
+    protected function getValidCart(): Cart|false
     {
         $id_cart = (int) Tools::getValue('id_cart', 0);
         if (!$id_cart) {
             return false;
         }
 
-        $cart = new Cart((int) $id_cart);
+        $cart = new Cart($id_cart);
         if (!Validate::isLoadedObject($cart)) {
             PrestaShopLogger::addLog('CHIP: payment controller - invalid cart ' . $id_cart, 3, null, 'Cart', $id_cart, true);
 
@@ -64,11 +63,11 @@ class ChipPaymentModuleFrontController extends ModuleFrontController
      * Build the CHIP purchase params following CHIP-API-SPEC.md
      * (mirrors the WooCommerce gateway params).
      *
-     * @param Cart $cart
      * @param ChipApi $chip API client (used for payment method group resolution)
+     *
      * @return array
      */
-    protected function buildPurchaseParams(Cart $cart, ChipApi $chip)
+    protected function buildPurchaseParams(Cart $cart, ChipApi $chip): array
     {
         $currency = new Currency((int) $cart->id_currency);
         $iso_code = Validate::isLoadedObject($currency) ? strtolower($currency->iso_code) : 'myr';
@@ -82,17 +81,17 @@ class ChipPaymentModuleFrontController extends ModuleFrontController
         $address_invoice = new Address((int) $cart->id_address_invoice);
 
         $full_name = trim($address_invoice->firstname . ' ' . $address_invoice->lastname);
-        if (empty($full_name)) {
+        if ($full_name === '') {
             $full_name = trim($customer->firstname . ' ' . $customer->lastname);
         }
 
-        $client = array(
+        $client = [
             'email' => $customer->email,
             'full_name' => substr($full_name, 0, 128),
             'street_address' => substr(trim($address_invoice->address1 . ' ' . $address_invoice->address2), 0, 128),
             'city' => substr($address_invoice->city, 0, 128),
             'zip_code' => substr($address_invoice->postcode, 0, 32),
-        );
+        ];
 
         if ($address_invoice->phone_mobile) {
             $client['phone'] = substr($address_invoice->phone_mobile, 0, 32);
@@ -116,7 +115,7 @@ class ChipPaymentModuleFrontController extends ModuleFrontController
         $address_delivery = new Address((int) $cart->id_address_delivery);
         if (Validate::isLoadedObject($address_delivery) && (int) $address_delivery->id !== (int) $address_invoice->id) {
             $shipping_street = trim($address_delivery->address1 . ' ' . $address_delivery->address2);
-            if ($shipping_street) {
+            if ($shipping_street !== '') {
                 $client['shipping_street_address'] = substr($shipping_street, 0, 128);
             }
             $client['shipping_city'] = substr($address_delivery->city, 0, 128);
@@ -136,25 +135,18 @@ class ChipPaymentModuleFrontController extends ModuleFrontController
         }
 
         // Drop empty client fields (mirrors WooCommerce behavior)
-        foreach ($client as $key => $value) {
-            if ($value === '' || $value === null) {
-                unset($client[$key]);
-            }
-        }
+        $client = array_filter($client, static fn ($value) => $value !== '' && $value !== null);
 
         $total = (float) $cart->getOrderTotal(true, Cart::BOTH);
         $total_override = (int) round($total * 100);
 
         // Products (sen prices)
-        $products = array();
+        $products = [];
         $use_total_override = false;
         foreach ($cart->getProducts() as $product) {
-            $qty = (int) $product['quantity'];
-            if ($qty < 1) {
-                $qty = 1;
-            }
+            $qty = max(1, (int) $product['quantity']);
 
-            $line_total = isset($product['total_wt']) ? (float) $product['total_wt'] : 0.0;
+            $line_total = (float) ($product['total_wt'] ?? 0.0);
             $unit_price = (int) round($line_total * 100 / $qty);
             if ($unit_price < 0) {
                 $unit_price = 0;
@@ -165,21 +157,21 @@ class ChipPaymentModuleFrontController extends ModuleFrontController
                 break;
             }
 
-            $products[] = array(
+            $products[] = [
                 'name' => substr((string) $product['name'], 0, 256),
                 'price' => $unit_price,
                 'quantity' => $qty,
-            );
+            ];
         }
 
-        if ($use_total_override || count($products) === 0) {
-            $products = array(
-                array(
+        if ($use_total_override || $products === []) {
+            $products = [
+                [
                     'name' => 'Order ' . (int) $cart->id,
                     'price' => $total_override,
                     'quantity' => 1,
-                ),
-            );
+                ],
+            ];
         }
 
         // All four URLs point to the CHIP callback controller, which redirects
@@ -187,11 +179,11 @@ class ChipPaymentModuleFrontController extends ModuleFrontController
         $callback_url = $this->context->link->getModuleLink(
             'chip',
             'callback',
-            array('id_cart' => (int) $cart->id),
+            ['id_cart' => (int) $cart->id],
             true
         );
 
-        $params = array(
+        $params = [
             'success_callback' => $callback_url,
             'success_redirect' => $callback_url,
             'failure_redirect' => $callback_url,
@@ -199,23 +191,23 @@ class ChipPaymentModuleFrontController extends ModuleFrontController
             'creator_agent' => 'PrestaShop: ' . Chip::CREATOR_AGENT_VERSION,
             'reference' => (string) $cart->id,
             'platform' => 'prestashop',
-            'purchase' => array(
+            'purchase' => [
                 'total_override' => $total_override,
                 'due_strict' => (bool) Configuration::get('CHIP_DUE_STRICT'),
                 'timezone' => (string) Configuration::get('CHIP_PURCHASE_TIME_ZONE'),
                 'currency' => $iso_code,
                 'language' => $language_code,
                 'products' => $products,
-            ),
+            ],
             'brand_id' => (string) Configuration::get('CHIP_BRAND_ID'),
             'client' => $client,
-        );
+        ];
 
         // Optional payment method whitelist from config.
         // Resolve DuitNow QR / ShopeePay groups against the merchant's actual
         // /payment_methods/ (dnqr > duitnow_qr, shopee_pay > razer_shopeepay).
         $whitelist = $this->module->getConfiguredWhitelist();
-        if (count($whitelist) > 0) {
+        if ($whitelist !== []) {
             $params['payment_method_whitelist'] = $chip->resolvePaymentMethodGroups(
                 $whitelist,
                 $iso_code,
@@ -229,7 +221,7 @@ class ChipPaymentModuleFrontController extends ModuleFrontController
     /**
      * Create the CHIP purchase and redirect to its checkout URL.
      */
-    public function postProcess()
+    public function postProcess(): void
     {
         $id_cart = (int) Tools::getValue('id_cart', 0);
         $cart = $this->getValidCart();
@@ -291,7 +283,7 @@ class ChipPaymentModuleFrontController extends ModuleFrontController
         Tools::redirect((string) $purchase['checkout_url']);
     }
 
-    public function initContent()
+    public function initContent(): void
     {
         parent::initContent();
     }

@@ -2,12 +2,14 @@
 /**
  * CHIP for PrestaShop - CHIP payment gateway module.
  *
- * Compatible with PrestaShop 1.7.0 - 9.1.4 (single module).
- * PHP 7.2+ compatible.
+ * Compatible with PrestaShop 9.0.0 - 9.x (single module).
+ * PHP 8.1+ optimized.
  *
  * @author CHIPAsia
  * @license http://opensource.org/licenses/osl-3.0.php Open Software License (OSL 3.0)
  */
+
+declare(strict_types=1);
 
 if (!defined('_PS_VERSION_')) {
     exit;
@@ -15,41 +17,32 @@ if (!defined('_PS_VERSION_')) {
 
 class Chip extends PaymentModule
 {
-    /** @var string */
     public $name = 'chip';
 
-    /** @var string */
     public $tab = 'payments_gateways';
 
-    /** @var string */
     public $version = '1.0.1';
 
-    /** @var string */
     public $author = 'CHIPAsia';
 
-    /** @var bool */
     public $need_instance = 1;
 
-    /** @var array */
-    public $ps_versions_compliancy = array('min' => '1.7', 'max' => '9.9.99');
+    /** @var array{min: string, max: string} */
+    public $ps_versions_compliancy = ['min' => '9.0.0', 'max' => '9.99.99'];
 
-    /** @var bool */
     public $bootstrap = true;
 
-    /** @var string */
     public $displayName;
 
-    /** @var string */
     public $description;
 
-    /** @var string */
     public $confirmUninstall;
 
     /** @var string Module key provided by PrestaShop Addons (assigned at product registration) */
     public $module_key = 'YOUR_MODULE_KEY_FROM_PRESTASHOP_ADDONS';
 
     /** @var string Module version used in the creator_agent header */
-    const CREATOR_AGENT_VERSION = '1.0.1';
+    public const CREATOR_AGENT_VERSION = '1.0.1';
 
     public function __construct()
     {
@@ -60,7 +53,7 @@ class Chip extends PaymentModule
         parent::__construct();
     }
 
-    public function install()
+    public function install(): bool
     {
         if (!parent::install()) {
             return false;
@@ -73,12 +66,12 @@ class Chip extends PaymentModule
         $this->registerHook('displayAdminOrderContentOrder');
 
         // Hidden admin tab that routes the refund + test-api AJAX actions
-        // to controllers/admin/ChipRefundController.php (1.7 legacy dispatcher
-        // and 9.x Symfony legacy router both resolve module tabs from the tab table).
+        // to controllers/admin/ChipRefundController.php (the 9.x Symfony
+        // legacy router resolves module tabs from the tab table).
         $tab = new Tab();
         $tab->active = 1;
         $tab->class_name = 'ChipRefund';
-        $tab->name = array();
+        $tab->name = [];
         foreach (Language::getLanguages(true) as $lang) {
             $tab->name[$lang['id_lang']] = 'CHIP Refund';
         }
@@ -93,12 +86,13 @@ class Chip extends PaymentModule
         Configuration::updateValue('CHIP_PAYMENT_METHOD_WHITELIST', '');
         Configuration::updateValue('CHIP_DUE_STRICT', 0);
         Configuration::updateValue('CHIP_PURCHASE_TIME_ZONE', 'Asia/Kuala_Lumpur');
+        Configuration::updateValue('CHIP_CHECKOUT_TEXT', '');
         Configuration::updateValue('CHIP_PUBLIC_KEY', '');
 
         return true;
     }
 
-    public function uninstall()
+    public function uninstall(): bool
     {
         $id_tab = (int) Tab::getIdFromClassName('ChipRefund');
         if ($id_tab > 0) {
@@ -113,137 +107,141 @@ class Chip extends PaymentModule
         Configuration::deleteByName('CHIP_PAYMENT_METHOD_WHITELIST');
         Configuration::deleteByName('CHIP_DUE_STRICT');
         Configuration::deleteByName('CHIP_PURCHASE_TIME_ZONE');
+        Configuration::deleteByName('CHIP_CHECKOUT_TEXT');
         Configuration::deleteByName('CHIP_PUBLIC_KEY');
 
         return parent::uninstall();
     }
 
     /**
-     * Hook paymentOptions (PrestaShop 1.7+ / 8.x / 9.x).
+     * Hook paymentOptions (PrestaShop 9.x).
      *
      * @param array $params
+     *
      * @return array of PaymentOption
      */
-    public function hookPaymentOptions($params)
+    public function hookPaymentOptions(array $params): array
     {
         if (!$this->active) {
-            return array();
+            return [];
         }
 
-        $cart = isset($this->context->cart) ? $this->context->cart : null;
+        $cart = $this->context->cart ?? null;
         if (!Validate::isLoadedObject($cart) || !$cart->id) {
-            return array();
+            return [];
         }
         if (!(int) $cart->id_customer) {
-            return array();
+            return [];
         }
 
         // A cart that already produced an order is handled by the payment flow (retry),
         // but we must not offer a second CHIP purchase for a paid cart.
-        $existing = Order::getIdByCartId((int) $cart->id);
-        if ($existing > 0) {
-            return array();
+        if (Order::getIdByCartId((int) $cart->id) > 0) {
+            return [];
         }
 
         $payment_option = new PrestaShop\PrestaShop\Core\Payment\PaymentOption();
         $payment_option->setCallToActionText($this->l('Pay with CHIP'));
         $payment_option->setModuleName($this->name);
-        $payment_option->setLogo($this->_path . 'logo.png');
         $payment_option->setAction(
             $this->context->link->getModuleLink(
                 $this->name,
                 'payment',
-                array('id_cart' => (int) $cart->id),
+                ['id_cart' => (int) $cart->id],
                 true
             )
         );
 
-        $methods = $this->getFormattedMethodLabels();
-        if (count($methods) > 0) {
-            $payment_option->setAdditionalInformation(
-                $this->l('Pay securely with:') . ' ' . implode(', ', $methods)
-            );
+        // Additional information text shown under "Pay with CHIP" on the
+        // checkout page. Merchants can customise it via the module config
+        // (CHIP_CHECKOUT_TEXT); when empty, the configured payment methods
+        // are listed automatically.
+        $checkout_text = trim((string) Configuration::get('CHIP_CHECKOUT_TEXT'));
+        if ($checkout_text !== '') {
+            $payment_option->setAdditionalInformation($checkout_text);
         } else {
-            $payment_option->setAdditionalInformation(
-                $this->l('Pay securely with FPX, DuitNow QR, cards and more.')
-            );
+            $methods = $this->getFormattedMethodLabels();
+            if (count($methods) > 0) {
+                $payment_option->setAdditionalInformation(
+                    $this->l('Pay securely with:') . ' ' . implode(', ', $methods)
+                );
+            } else {
+                $payment_option->setAdditionalInformation(
+                    $this->l('Pay securely with FPX, DuitNow QR, cards and more.')
+                );
+            }
         }
 
         // Show any payment error left in the session (redirected back from the callback)
         if (isset($this->context->cookie->chip_payment_error) && $this->context->cookie->chip_payment_error !== '') {
-            $error_text = (string) $this->context->cookie->chip_payment_error;
-            if (count($methods) > 0) {
-                $payment_option->setAdditionalInformation(
-                    $this->l('Pay securely with:') . ' ' . implode(', ', $methods) . ' — ' . $error_text
-                );
-            } else {
-                $payment_option->setAdditionalInformation($error_text);
-            }
+            $payment_option->setAdditionalInformation((string) $this->context->cookie->chip_payment_error);
             unset($this->context->cookie->chip_payment_error);
             $this->context->cookie->write();
         }
 
-        return array($payment_option);
+        return [$payment_option];
     }
 
     /**
      * Hook displayPaymentReturn: shown on the order confirmation page after a CHIP payment.
-     * Hook signature is identical in 1.7.8.11 and 9.1.4: params['order'] is an Order object.
      *
      * @param array $params
+     *
      * @return string HTML
      */
-    public function hookDisplayPaymentReturn($params)
+    public function hookDisplayPaymentReturn(array $params): string
     {
         if (!$this->active) {
             return '';
         }
 
-        $order = isset($params['order']) ? $params['order'] : null;
+        $order = $params['order'] ?? null;
         if (!Validate::isLoadedObject($order)) {
             return '';
         }
 
-        $this->context->smarty->assign(array(
+        $this->context->smarty->assign([
             'chip_order_reference' => $order->reference,
             'chip_total_paid' => $order->total_paid,
             'chip_payment_method' => $order->payment,
             'chip_module_name' => $this->displayName,
-        ));
+        ]);
 
         return $this->display(__FILE__, 'payment_return.tpl');
     }
 
     /**
-     * Hook displayAdminOrderSide (1.7.7+ / 8.x / 9.x) - refund button.
+     * Hook displayAdminOrderSide (9.x) - refund button.
      *
      * @param array $params
+     *
      * @return string HTML
      */
-    public function hookDisplayAdminOrderSide($params)
+    public function hookDisplayAdminOrderSide(array $params): string
     {
         return $this->renderAdminRefund($params);
     }
 
     /**
-     * Hook displayAdminOrderMain (1.7.7+ / 8.x / 9.x) - refund button (fallback location).
+     * Hook displayAdminOrderMain (9.x) - refund button (fallback location).
      *
      * @param array $params
+     *
      * @return string HTML
      */
-    public function hookDisplayAdminOrderMain($params)
+    public function hookDisplayAdminOrderMain(array $params): string
     {
         return $this->renderAdminRefund($params);
     }
 
     /**
-     * Hook displayAdminOrderContentOrder (since 1.7.7) - refund button for
-     * PrestaShop 1.7.0-1.7.6 which do not have displayAdminOrderSide yet.
+     * Hook displayAdminOrderContentOrder - refund button (legacy location).
      *
      * @param array $params
+     *
      * @return string HTML
      */
-    public function hookDisplayAdminOrderContentOrder($params)
+    public function hookDisplayAdminOrderContentOrder(array $params): string
     {
         return $this->renderAdminRefund($params);
     }
@@ -252,17 +250,18 @@ class Chip extends PaymentModule
      * Build the admin refund block (single implementation shared by the three hooks).
      *
      * @param array $params
+     *
      * @return string HTML
      */
-    protected function renderAdminRefund($params)
+    protected function renderAdminRefund(array $params): string
     {
         if (!$this->active) {
             return '';
         }
 
         // displayAdminOrderSide / displayAdminOrderMain pass id_order;
-        // displayAdminOrderContentOrder (1.7.0-1.7.6) passes an Order object.
-        $id_order = isset($params['id_order']) ? (int) $params['id_order'] : 0;
+        // displayAdminOrderContentOrder passes an Order object.
+        $id_order = (int) ($params['id_order'] ?? 0);
         if ($id_order <= 0 && isset($params['order']) && Validate::isLoadedObject($params['order'])) {
             $id_order = (int) $params['order']->id;
         }
@@ -285,22 +284,22 @@ class Chip extends PaymentModule
             return '';
         }
 
-        $this->context->smarty->assign(array(
+        $this->context->smarty->assign([
             'chip_refund_url' => $this->context->link->getAdminLink(
                 'ChipRefund',
                 true,
-                array(),
-                array(
+                [],
+                [
                     'ajax' => 1,
                     'action' => 'refund',
                     'id_order' => $id_order,
                     'purchase_id' => $purchase_id,
-                )
+                ]
             ),
             'chip_purchase_id' => $purchase_id,
             'chip_id_order' => $id_order,
             'chip_total_paid' => $order->total_paid,
-        ));
+        ]);
 
         return $this->display(__FILE__, 'admin_refund.tpl');
     }
@@ -310,15 +309,15 @@ class Chip extends PaymentModule
      *
      * @return string HTML
      */
-    public function getContent()
+    public function getContent(): string
     {
         $output = '';
-        $errors = array();
 
         if (Tools::isSubmit('submitChipConfig')) {
             $secret_key = trim((string) Tools::getValue('CHIP_SECRET_KEY'));
             $brand_id = trim((string) Tools::getValue('CHIP_BRAND_ID'));
 
+            $errors = [];
             if ($secret_key === '') {
                 $errors[] = $this->l('Secret key is required.');
             }
@@ -326,7 +325,7 @@ class Chip extends PaymentModule
                 $errors[] = $this->l('Brand ID is required.');
             }
 
-            if (count($errors) === 0) {
+            if ($errors === []) {
                 Configuration::updateValue('CHIP_SECRET_KEY', $secret_key);
                 Configuration::updateValue('CHIP_BRAND_ID', $brand_id);
 
@@ -345,6 +344,10 @@ class Chip extends PaymentModule
                 Configuration::updateValue(
                     'CHIP_PURCHASE_TIME_ZONE',
                     (string) Tools::getValue('CHIP_PURCHASE_TIME_ZONE', 'Asia/Kuala_Lumpur')
+                );
+                Configuration::updateValue(
+                    'CHIP_CHECKOUT_TEXT',
+                    (string) Tools::getValue('CHIP_CHECKOUT_TEXT', '')
                 );
 
                 $output .= $this->displayConfirmation($this->l('Settings updated'));
@@ -365,11 +368,11 @@ class Chip extends PaymentModule
      *
      * @return string HTML
      */
-    public function renderForm()
+    public function renderForm(): string
     {
         $whitelist = $this->getConfiguredWhitelist();
 
-        $this->context->smarty->assign(array(
+        $this->context->smarty->assign([
             'chip_config_saved' => Tools::isSubmit('submitChipConfig') && count($this->getConfigErrors()) === 0,
             'chip_config_error' => implode('<br />', $this->getConfigErrors()),
             'chip_config_action' => $_SERVER['REQUEST_URI'],
@@ -379,7 +382,8 @@ class Chip extends PaymentModule
             'chip_method_selected' => $whitelist,
             'chip_due_strict' => (int) Configuration::get('CHIP_DUE_STRICT'),
             'chip_timezone' => (string) Configuration::get('CHIP_PURCHASE_TIME_ZONE'),
-        ));
+            'chip_checkout_text' => (string) Configuration::get('CHIP_CHECKOUT_TEXT'),
+        ]);
 
         return $this->display(__FILE__, 'config_form.tpl');
     }
@@ -389,9 +393,9 @@ class Chip extends PaymentModule
      *
      * @return array
      */
-    protected function getConfigErrors()
+    protected function getConfigErrors(): array
     {
-        $errors = array();
+        $errors = [];
         if (Tools::isSubmit('submitChipConfig')) {
             if (trim((string) Tools::getValue('CHIP_SECRET_KEY')) === '') {
                 $errors[] = $this->l('Secret key is required.');
@@ -409,18 +413,18 @@ class Chip extends PaymentModule
      *
      * @return string HTML
      */
-    protected function renderTestApiButton()
+    protected function renderTestApiButton(): string
     {
         $test_url = $this->context->link->getAdminLink(
             'ChipRefund',
             true,
-            array(),
-            array('ajax' => 1, 'action' => 'testapi')
+            [],
+            ['ajax' => 1, 'action' => 'testapi']
         );
 
-        $this->context->smarty->assign(array(
+        $this->context->smarty->assign([
             'chip_test_url' => $test_url,
-        ));
+        ]);
 
         return $this->display(__FILE__, 'test_api.tpl');
     }
@@ -431,16 +435,16 @@ class Chip extends PaymentModule
      *
      * @return array
      */
-    public function getConfiguredWhitelist()
+    public function getConfiguredWhitelist(): array
     {
         $whitelist = Configuration::get('CHIP_PAYMENT_METHOD_WHITELIST');
         if (empty($whitelist)) {
-            return array();
+            return [];
         }
 
         $whitelist = json_decode($whitelist, true);
         if (!is_array($whitelist)) {
-            return array();
+            return [];
         }
 
         return array_values(array_filter(array_map('strval', $whitelist)));
@@ -451,9 +455,9 @@ class Chip extends PaymentModule
      *
      * @return array
      */
-    protected function getFormattedLabels()
+    protected function getFormattedLabels(): array
     {
-        return array(
+        return [
             'fpx' => 'FPX',
             'fpx_b2b1' => 'FPX B2B1',
             'card' => 'Card (Visa, Mastercard, Maestro)',
@@ -465,7 +469,7 @@ class Chip extends PaymentModule
             'razer_shopeepay' => 'ShopeePay',
             'razer_tng' => "Touch 'n Go eWallet",
             'crypto_coin' => 'Crypto Coin',
-        );
+        ];
     }
 
     /**
@@ -473,22 +477,18 @@ class Chip extends PaymentModule
      *
      * @return array list of display names
      */
-    public function getFormattedMethodLabels()
+    public function getFormattedMethodLabels(): array
     {
         $codes = $this->getConfiguredWhitelist();
-        if (count($codes) === 0) {
-            return array();
+        if ($codes === []) {
+            return [];
         }
 
         $labels = $this->getFormattedLabels();
-        $output = array();
+        $output = [];
         foreach ($codes as $code) {
             $code = (string) $code;
-            if (isset($labels[$code])) {
-                $output[] = $labels[$code];
-            } else {
-                $output[] = $code;
-            }
+            $output[] = $labels[$code] ?? $code;
         }
 
         return $output;
@@ -497,14 +497,12 @@ class Chip extends PaymentModule
     /**
      * Read the CHIP purchase id stored on the order (transaction id of the order payment).
      *
-     * @param Order $order
      * @return string purchase id, or '' when none
      */
-    public function getOrderPurchaseId(Order $order)
+    public function getOrderPurchaseId(Order $order): string
     {
-        $payments = $order->getOrderPaymentCollection();
-        foreach ($payments as $payment) {
-            $transaction_id = isset($payment->transaction_id) ? (string) $payment->transaction_id : '';
+        foreach ($order->getOrderPaymentCollection() as $payment) {
+            $transaction_id = (string) ($payment->transaction_id ?? '');
             if ($transaction_id !== '') {
                 return $transaction_id;
             }
@@ -515,10 +513,8 @@ class Chip extends PaymentModule
 
     /**
      * Instantiate the CHIP API client with the configured credentials.
-     *
-     * @return ChipApi
      */
-    public function getApi()
+    public function getApi(): ChipApi
     {
         // Explicit require: the PrestaShop class index may not have been
         // rebuilt after the module was copied into place (e.g. manual install

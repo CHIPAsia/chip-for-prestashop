@@ -83,6 +83,16 @@
           <p class="help-block">{l s='Timezone used for the purchase (e.g. Asia/Kuala_Lumpur).' mod='chip'}</p>
         </div>
       </div>
+      <div class="form-group">
+        <label class="control-label col-lg-3" for="chip_checkout_text">
+          {l s='Checkout Text' mod='chip'}
+        </label>
+        <div class="col-lg-9">
+          <textarea name="CHIP_CHECKOUT_TEXT" id="chip_checkout_text" class="form-control"
+                    rows="3">{$chip_checkout_text|escape:'html':'UTF-8'}</textarea>
+          <p class="help-block">{l s='Text shown under "Pay with CHIP" on the checkout page. Leave empty to list the configured payment methods automatically.' mod='chip'}</p>
+        </div>
+      </div>
       <div class="panel-footer">
         <button type="submit" name="submitChipConfig" class="btn btn-primary">
           <i class="icon-save"></i> {l s='Save' mod='chip'}
