@@ -66,6 +66,21 @@ class ChipRefundController extends ModuleAdminController
             ]);
         }
 
+        // Update the PrestaShop order status to Refunded (creates an order
+        // history entry via OrderHistory).
+        try {
+            $order->setCurrentState(Configuration::get('PS_OS_REFUND'));
+        } catch (Exception $e) {
+            PrestaShopLogger::addLog(
+                'CHIP: failed to update order ' . $id_order . ' status after refund: ' . $e->getMessage(),
+                3,
+                null,
+                'Order',
+                $id_order,
+                true
+            );
+        }
+
         PrestaShopLogger::addLog(
             'CHIP: refund processed for order ' . $id_order . ' purchase ' . $purchase_id . ' amount ' . $amount_sen,
             1,
@@ -77,7 +92,7 @@ class ChipRefundController extends ModuleAdminController
 
         $this->ajaxDieJson([
             'success' => true,
-            'message' => $this->module->l('Refund request sent to CHIP. It will appear in the CHIP dashboard.'),
+            'message' => $this->module->l('Refund request sent to CHIP. Order marked as refunded.'),
         ]);
     }
 
